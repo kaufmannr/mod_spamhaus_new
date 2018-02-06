@@ -60,7 +60,7 @@ static void register_hooks(apr_pool_t *p);
 int check_whitelist(char *conf, request_rec *r);
 int check_unaffected(char *conf, request_rec *r);
 void update_list(char *list, int listsize, char *filename);
-int add_cache(char *indirizzo, int num);
+void add_cache(char *indirizzo, int num);
 
 char lookup_this[512];
 int oct1, oct2, oct3, oct4;
@@ -163,7 +163,7 @@ int check_whitelist(char *conf, request_rec *r)
 
 	for (int count = 0; count < WHITELIST_SIZE; count++)
 	{
-		if (listwhitelist[count][0] == 0) return 0;
+		if (listwhitelist[count][0] == 0) break;
 
 		brokenfeed = strchr(&listwhitelist[count * ENTRY_SIZE][0], '\n');
 		if ( brokenfeed ) *brokenfeed = 0;
@@ -228,14 +228,15 @@ int check_unaffected(char *conf, request_rec *r)
 
 		if ( strcmp(&listunaffected[count * ENTRY_SIZE][0], r->hostname) == 0 ) return 1;
 	}
+  return 0;
 }
 
 
-int add_cache(char *indirizzo, int num)
+void add_cache(char *indirizzo, int num)
 {
 	for (int cx = 0; cx < num; cx++)
 		if (strcmp(cached_ip[cx],indirizzo) == 0 )
-			return 0;
+			return;
 
 	strncpy(cached_ip[nip], indirizzo, 15);
 	if (nip == (num - 1)) nip = 0;
