@@ -228,7 +228,7 @@ int check_unaffected(char *conf, request_rec *r)
 
 		if ( strcmp(&listunaffected[count * ENTRY_SIZE][0], r->hostname) == 0 ) return 1;
 	}
-  return 0;
+	return 0;
 }
 
 
