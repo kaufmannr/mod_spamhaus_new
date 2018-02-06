@@ -88,7 +88,7 @@ MS_UnaffectedDomains
 
     Path of unaffected domains file. Format: www.example.com
     Domains listed in this file are not spamhaus-checked, so e.g. visitors can do 
-    an order in an online shop or can contact you whithout being locked out.
+    an order in an online shop or can contact you without being locked out.
     This can be helpful if you have customers that had bad luck and got a dynamic
     IP which is already in a spam-list.
 
