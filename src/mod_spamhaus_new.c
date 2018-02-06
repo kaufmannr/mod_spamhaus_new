@@ -398,7 +398,7 @@ static command_rec spamhaus_cmds[] = {
 	AP_INIT_TAKE1("MS_Dns", dns_to_query, NULL, RSRC_CONF,"Blacklist name server (Default: sbl-xbl.spamhaus.org)"),
 	AP_INIT_TAKE1("MS_WhiteList", whitelist_conf, NULL, RSRC_CONF,"The path of your whitelist file"),
 	AP_INIT_TAKE1("MS_UnaffectedDomains", unaffected_conf, NULL, RSRC_CONF,"The path of your unaffected domains file"),
-	AP_INIT_TAKE1("MS_CacheSize", num_cached_ip, NULL, RSRC_CONF,"Number of cache entries. Default:2048 Max:8192"),
+	AP_INIT_TAKE1("MS_CacheSize", num_cached_ip, NULL, RSRC_CONF,"Number of cache entries. Default:2048 Max:16384"),
 	AP_INIT_TAKE1("MS_CustomError", custom_err_cfg, NULL, RSRC_CONF,"Custom error message"),
 	{NULL}
 };
