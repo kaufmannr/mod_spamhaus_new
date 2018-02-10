@@ -1,5 +1,5 @@
 # mod_spamhaus_new
-mod_spamhaus_new is an Apache module that uses DNSBL in order to block spam relay via web forms, 
+Apache 2.4 spam blocking: mod_spamhaus_new is an Apache module that uses DNSBL in order to block spam relay via web forms, 
 preventing URL injection, block http DDoS attacks from bots and generally protecting your web service 
 denying access to a known bad IP address. 
 
