@@ -1,6 +1,6 @@
 /*
  *
- * Date:        2018/02/02
+ * Date:        2018/02/10
  * Info:        mod_spamhaus_new Apache 2.4 module
  * Contact:     mailto: <info [at] kaufmann-automotive.ch>
  * Version:     0.8
@@ -269,7 +269,7 @@ static int core(request_rec *r, mod_config *cfg)
 
 			if (oct1 != 127)
 			{
-				ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "mod_spamhaus: address %s is blacklisted but it's not in the 127.0.0.0/8 range. POSSIBLE WILD-CARDING TYPOSQUATTERS ATTACK! IP address will not get filtered", r->useragent_ip);
+				ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, MODULE_NAME ": address %s is blacklisted but it's not in the 127.0.0.0/8 range. POSSIBLE WILD-CARDING TYPOSQUATTERS ATTACK! IP address will not get filtered", r->useragent_ip);
 				return DECLINED;
 			}
 
@@ -277,7 +277,7 @@ static int core(request_rec *r, mod_config *cfg)
 			{
 				if ( check_whitelist(cfg->whitelist, r) )
 				{
-					ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "mod_spamhaus: address %s is whitelisted. Allow connection to %s%s", r->useragent_ip, r->hostname, r->uri);
+					ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, MODULE_NAME ": address %s is whitelisted. Allow connection to %s%s", r->useragent_ip, r->hostname, r->uri);
 					add_cache(r->useragent_ip, cfg->nip_incache);
 					return DECLINED;
 				}
@@ -287,13 +287,13 @@ static int core(request_rec *r, mod_config *cfg)
 			{
 				if ( check_unaffected(cfg->unaffected, r) )
 				{
-					ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "mod_spamhaus: domain %s is not checked. Allow connection to %s%s", r->hostname, r->hostname, r->uri);
+					ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, MODULE_NAME ": domain %s is not checked. Allow connection to %s%s", r->hostname, r->hostname, r->uri);
 					add_cache(r->useragent_ip, cfg->nip_incache);
 					return DECLINED;
 				}
 			}
 
-			ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "mod_spamhaus: address %s is blacklisted. Deny connection to %s%s", lookup_this, r->hostname, r->uri);
+			ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, MODULE_NAME ": address %s is blacklisted. Deny connection to %s%s", lookup_this, r->hostname, r->uri);
 
 			r->content_type = "text/plain"; 
 			ap_custom_response(r, HTTP_UNAUTHORIZED, cfg->c_err); 
