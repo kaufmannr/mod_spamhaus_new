@@ -342,13 +342,13 @@ static const char *whitelist_conf(cmd_parms *parms, void *dummy, const char *arg
 
 static const char *unaffected_conf(cmd_parms *parms, void *dummy, const char *arg)
 {
-        mod_config_t *cfg = (mod_config_t *)dummy;
-        ap_get_module_config(parms->server->module_config, &spamhaus_new_module);
+	mod_config_t *cfg = (mod_config_t *)dummy;
+	ap_get_module_config(parms->server->module_config, &spamhaus_new_module);
 
-        cfg->unaffected = (char *)arg;
+	cfg->unaffected = (char *)arg;
 
-        update_list(&listunaffected[0][0], sizeof(listunaffected), cfg->unaffected);
-        return NULL;
+	update_list(&listunaffected[0][0], sizeof(listunaffected), cfg->unaffected);
+	return NULL;
 }
 
 
