@@ -85,12 +85,12 @@ typedef struct {
 	char *dnshost;
 	int cached_ip_size;
 	char *c_err;
-} mod_config;
+} mod_config_t;
 
 
-static mod_config *create_config(apr_pool_t *p)
+static mod_config_t *create_config(apr_pool_t *p)
 {
-	mod_config *cfg = (mod_config *)apr_pcalloc(p, sizeof (*cfg));
+	mod_config_t *cfg = (mod_config_t *)apr_pcalloc(p, sizeof (*cfg));
 
 	cfg->methods = "POST,PUT,OPTIONS";
 	cfg->whitelist = NULL;
@@ -264,7 +264,7 @@ void get_file_mtime(request_rec *r, char* filename, time_t* mtime)
 
 static int spamhaus_handler(request_rec *r)
 {
-	mod_config *cfg = (mod_config *)ap_get_module_config(r->per_dir_config, &spamhaus_new_module);
+	mod_config_t *cfg = (mod_config_t *)ap_get_module_config(r->per_dir_config, &spamhaus_new_module);
 
 	if (strstr(cfg->methods, r->method) != NULL)
 	{
@@ -330,7 +330,7 @@ static int spamhaus_handler(request_rec *r)
 
 static const char *whitelist_conf(cmd_parms *parms, void *dummy, const char *arg)
 {
-	mod_config *cfg = (mod_config *)dummy;
+	mod_config_t *cfg = (mod_config_t *)dummy;
 	ap_get_module_config(parms->server->module_config, &spamhaus_new_module);
 
 	cfg->whitelist = (char *)arg;
@@ -342,7 +342,7 @@ static const char *whitelist_conf(cmd_parms *parms, void *dummy, const char *arg
 
 static const char *unaffected_conf(cmd_parms *parms, void *dummy, const char *arg)
 {
-        mod_config *cfg = (mod_config *)dummy;
+        mod_config_t *cfg = (mod_config_t *)dummy;
         ap_get_module_config(parms->server->module_config, &spamhaus_new_module);
 
         cfg->unaffected = (char *)arg;
@@ -354,7 +354,7 @@ static const char *unaffected_conf(cmd_parms *parms, void *dummy, const char *ar
 
 static const char *dns_to_query(cmd_parms *parms, void *dummy, const char *arg)
 {
-	mod_config *cfg = (mod_config *)dummy;
+	mod_config_t *cfg = (mod_config_t *)dummy;
 	ap_get_module_config(parms->server->module_config, &spamhaus_new_module);
 
 	cfg->dnshost = (char *)arg;
@@ -364,7 +364,7 @@ static const char *dns_to_query(cmd_parms *parms, void *dummy, const char *arg)
 
 static const char *looking_for(cmd_parms *parms, void *dummy, const char *arg)
 {
-	mod_config *cfg = (mod_config *)dummy;
+	mod_config_t *cfg = (mod_config_t *)dummy;
 	ap_get_module_config(parms->server->module_config, &spamhaus_new_module);
 
 	cfg->methods = (char *)arg;
@@ -374,7 +374,7 @@ static const char *looking_for(cmd_parms *parms, void *dummy, const char *arg)
 
 static const char *cachesize(cmd_parms *parms, void *dummy, const char *arg)
 {
-	mod_config *cfg = (mod_config *)dummy;
+	mod_config_t *cfg = (mod_config_t *)dummy;
 	ap_get_module_config(parms->server->module_config, &spamhaus_new_module);
 
 	cfg->cached_ip_size = atoi(arg);
@@ -387,7 +387,7 @@ static const char *cachesize(cmd_parms *parms, void *dummy, const char *arg)
 
 static const char *custom_err_cfg(cmd_parms *parms, void *dummy, const char *arg)
 {
-	mod_config *cfg = (mod_config *)dummy;
+	mod_config_t *cfg = (mod_config_t *)dummy;
 	ap_get_module_config(parms->server->module_config, &spamhaus_new_module);
 
 	cfg->c_err = (char *)arg;
