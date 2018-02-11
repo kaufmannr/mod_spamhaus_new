@@ -113,7 +113,7 @@ MS_CacheValidity
     Syntax:    MS_CacheValidity 86400
     Default:   172800
 
-    This directive defines the number of seconds how long cached MS_DSN entries are valid.
+    This directive defines the number of seconds how long cached MS_DNS entries are valid.
 
 MS_CustomError
 
