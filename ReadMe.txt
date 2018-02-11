@@ -100,7 +100,6 @@ MS_DNS
     Name server to use for verify is an ip is blacklisted.
     Using a local rbldnsd instance of sbl-xbl, you can increase query performance
 
-
 MS_CacheSize
 
     Syntax:    MS_CacheSize 4096
@@ -109,6 +108,12 @@ MS_CacheSize
     
     This directive can manage the number of cache entries.
 
+MS_CacheValidity
+
+    Syntax:    MS_CacheValidity 86400
+    Default:   172800
+
+    This directive defines the number of seconds how long cached MS_DSN entries are valid.
 
 MS_CustomError
 
