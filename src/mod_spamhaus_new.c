@@ -44,6 +44,7 @@
 #include <errno.h>
 
 
+/* Module configuration */
 #define MODULE_NAME       "mod_spamhaus_new"
 #define MODULE_VERSION    "0.8"
 #define DEF_CACHE_SIZE    2048
@@ -52,6 +53,16 @@
 
 #define STR_HELPER(x)     #x
 #define STR(x)            STR_HELPER(x)
+
+/* Enable info logging in Apache error log with small cache size and validity time */
+//#define DEBUG
+
+/* Small lookup cache size */
+//#define DEBUG_CACHE_SIZE
+
+/* Small lookup cache validity */
+//#define DEBUG_CACHE_VALIDITY
+
 
 module AP_MODULE_DECLARE_DATA spamhaus_new_module;
 
@@ -64,12 +75,13 @@ static void register_hooks(apr_pool_t *p);
 int check_whitelist(apr_pool_t *p, char *conf, request_rec *r);
 int check_unaffected(apr_pool_t *p, char *conf, request_rec *r);
 void update_whitelist(apr_pool_t *p, char *filename);
-void update_unaffected(apr_pool_t *p, char *filename);
+void update_unaffected(apr_pool_t *p, char *filename, request_rec *r);
 void add_cache(apr_pool_t *p, char *ip, int cache_ip_size, int cache_ip_validity);
-void get_file_mtime(request_rec *r, char* filename, time_t* mtime);
+void get_file_mtime(char* filename, time_t* mtime);
 
-time_t old_whitelist_mtime, old_unaffected_mtime;
-
+time_t whitelist_mtime, old_whitelist_mtime;
+time_t unaffected_mtime, old_unaffected_mtime;
+apr_pool_t *module_pool;
 apr_hash_t *hash_whitelist;
 apr_hash_t *hash_unaffected;
 apr_hash_t *hash_remote_ip;
@@ -99,7 +111,7 @@ typedef struct
 /* Preset module configuration */
 static mod_config_t *create_config(apr_pool_t *p)
 {
-  mod_config_t *cfg = (mod_config_t *)apr_pcalloc(p, sizeof (*cfg));
+  mod_config_t *cfg = (mod_config_t *)apr_palloc(p, sizeof (*cfg));
 
   cfg->methods = "POST,PUT,OPTIONS";
   cfg->whitelist = NULL;
@@ -130,50 +142,64 @@ void update_whitelist(apr_pool_t *p, char *filename)
 {
   FILE *file;
   char *nl;
+  char line[32];
   
   apr_hash_clear(hash_whitelist);
 
   file = fopen(filename, "r");
   if(file)
   {
-    while (!feof(file))
-    {
-      ip_t *entry = apr_palloc(p, sizeof(ip_t));
-      if (entry == NULL)
-        return;
-
-      memset(entry->ip, 0, sizeof(entry->ip));
-      char *l = fgets(entry->ip, sizeof(entry->ip), file);
-      nl = strchr(entry->ip, '\n');
-      if ( nl != NULL ) *nl = 0;
-      apr_hash_set(hash_whitelist, entry->ip, APR_HASH_KEY_STRING, entry);
+    while (fgets(line, sizeof(line), file))
+    { 
+      /* Is it a complete line? */
+      nl = strchr(line, '\n');
+      if (nl != NULL)
+      {
+        *nl = 0;
+      
+        /* Get zeroed memory from according pool */
+        ip_t *entry = apr_palloc(p, sizeof(ip_t));
+        if (entry == NULL)
+          break;
+        
+        apr_cpystrn(entry->ip, line, sizeof(entry->ip));
+        apr_hash_set(hash_whitelist, entry->ip, APR_HASH_KEY_STRING, entry);
+      }
     }
     fclose(file);
   }
 }
 
 /* Update unaffected domain list from file */
-void update_unaffected(apr_pool_t *p, char *filename)
+void update_unaffected(apr_pool_t *p, char *filename, request_rec *r)
 {
   FILE *file;
   char *nl;
+  char line[64];
 
   apr_hash_clear(hash_unaffected);
 
   file = fopen(filename, "r");
   if(file)
   {
-    while (!feof(file))
+    while (fgets(line, sizeof(line), file))
     { 
-      unaffected_t *entry = apr_palloc(p, sizeof(unaffected_t));
-      if (entry == NULL)
-        return;
-
-      memset(entry->domain, 0, sizeof(entry->domain));
-      char *l = fgets(entry->domain, sizeof(entry->domain), file);
-      nl = strchr(entry->domain, '\n');
-      if ( nl != NULL ) *nl = 0;
-      apr_hash_set(hash_unaffected, entry->domain, APR_HASH_KEY_STRING, entry);
+      /* Is it a complete line? */
+      nl = strchr(line, '\n');
+      if (nl != NULL)
+      {
+        *nl = 0;
+      
+        /* Get zeroed memory from according pool */
+        unaffected_t *entry = apr_palloc(p, sizeof(unaffected_t));
+        if (entry == NULL)
+          break;
+#ifdef DEBUG        
+        ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Read line %s", line);
+#endif
+        apr_cpystrn(entry->domain, line, sizeof(entry->domain));
+        apr_hash_set(hash_unaffected, entry->domain, APR_HASH_KEY_STRING, entry);
+      }
     }
     fclose(file);
   }
@@ -182,7 +208,6 @@ void update_unaffected(apr_pool_t *p, char *filename)
 /* Check if useragent_ip is in our whitelist */
 int check_whitelist(apr_pool_t *p, char *filename, request_rec *r)
 {
-  time_t whitelist_mtime = (time_t)0;
   unsigned long first, last, mask;
   char ippi[16];
   struct in_addr in;
@@ -193,16 +218,21 @@ int check_whitelist(apr_pool_t *p, char *filename, request_rec *r)
   apr_hash_index_t *hidx = NULL;
   ip_t *entry;
 
-  get_file_mtime(r, filename, &whitelist_mtime);
+  get_file_mtime(filename, &whitelist_mtime);
 
   if (whitelist_mtime != old_whitelist_mtime)
   {
+#ifdef DEBUG
     ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Reloading whitelist %s", filename);
-    old_whitelist_mtime = whitelist_mtime;
+#endif
     update_whitelist(p, filename);
+    old_whitelist_mtime = whitelist_mtime;
   }
 
   /* Scan complete whitelist */
+#ifdef DEBUG
+  ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Check whitelist for ip %s", r->useragent_ip);
+#endif
   for (hidx = apr_hash_first(p, hash_whitelist); hidx; hidx = apr_hash_next(hidx))
   {
     apr_hash_this(hidx, NULL, NULL, (void*)&entry);
@@ -250,32 +280,47 @@ int check_whitelist(apr_pool_t *p, char *filename, request_rec *r)
 /* Check if requested hostname is an unaffected domain */
 int check_unaffected(apr_pool_t *p, char *filename, request_rec *r)
 {
-  time_t unaffected_mtime = (time_t)0;
+#ifdef DEBUG
+  apr_hash_index_t *hidx = NULL;
+#endif
   unaffected_t *entry;
 
-  get_file_mtime(r, filename, &unaffected_mtime);
+  get_file_mtime(filename, &unaffected_mtime);
 
   if (unaffected_mtime != old_unaffected_mtime)
   {
+#ifdef DEBUG
     ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Reloading list of unaffected domains %s", filename);
+#endif
+    update_unaffected(p, filename, r);
     old_unaffected_mtime = unaffected_mtime;
-    update_unaffected(p, filename);
   }
-
+#ifdef DEBUG
+  ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Check list of unaffected domains (size %d) for %s", apr_hash_count(hash_unaffected), r->hostname);
+  for (hidx = apr_hash_first(p, hash_unaffected); hidx; hidx = apr_hash_next(hidx))
+  {
+    apr_hash_this(hidx, NULL, NULL, (void*)&entry);
+    ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "List contains (key %s/value %ld)", entry->domain, (intptr_t)(entry));
+  }
+#endif
   entry = apr_hash_get(hash_unaffected, r->hostname, APR_HASH_KEY_STRING);
+#ifdef DEBUG
+    ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Unaffected domain found for %s:%d", r->hostname, (entry != NULL));
+#endif
   return (entry != NULL);
 }
 
 /* Add a looked up remote_ip to our cache actualize timestamps and handle max cache size */
 void add_cache(apr_pool_t *p, char *ip, int cache_ip_size, int cache_ip_validity)
 {
-  int hash_size;
+  int hash_size, hash_deflate;
   apr_hash_index_t *hidx = NULL;
   ip_t *entry;
 
-  /* If cache too big, delete first 50 entries */
+  /* If cache too big, delete first 10% entries */
+  hash_deflate = cache_ip_size * 0.1;
   hash_size = apr_hash_count(hash_remote_ip);
-  while ((hash_size + 50) > cache_ip_size)
+  while ((hash_size + hash_deflate) > cache_ip_size)
   {
     hidx = apr_hash_first(p, hash_remote_ip);
     if (hidx == NULL)
@@ -290,31 +335,26 @@ void add_cache(apr_pool_t *p, char *ip, int cache_ip_size, int cache_ip_validity
   entry = apr_hash_get(hash_remote_ip, ip, APR_HASH_KEY_STRING);
   if (entry == NULL)
   {
-    /* Create new entry */
+    /* Create new entry, get zeroed memory from according pool */
     entry = apr_palloc(p, sizeof(ip_t));
     if (entry == NULL)
       return;
 
-    memset(entry->ip, 0, sizeof(entry->ip));
     apr_cpystrn(entry->ip, ip, sizeof(entry->ip));
   }
-  entry->stamp = apr_time_now();
+  entry->stamp = time(NULL);
   apr_hash_set(hash_remote_ip, entry->ip, APR_HASH_KEY_STRING, entry);
 }
 
 /* Get file modification time and store it in mtime */
-void get_file_mtime(request_rec *r, char* filename, time_t* mtime)
+void get_file_mtime(char* filename, time_t* mtime)
 {
   struct stat statdata;
 
-  if ( (filename == NULL) || (mtime == NULL) || (r == NULL) )
+  if ( (filename == NULL) || (mtime == NULL) )
     return;
 
-  if (stat(filename, &statdata) == -1)
-  {
-    ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Stat for %s failed. %s", filename, strerror(errno));
-  }
-  else
+  if (stat(filename, &statdata) == 0)
   {
     *mtime = statdata.st_mtime;
   }
@@ -324,31 +364,38 @@ void get_file_mtime(request_rec *r, char* filename, time_t* mtime)
 static int spamhaus_handler(request_rec *r)
 {
   mod_config_t *cfg = (mod_config_t *)ap_get_module_config(r->per_dir_config, &spamhaus_new_module);
-
+  
   if (strstr(cfg->methods, r->method) != NULL)
   {
     struct hostent *hp;
     char lookup_ip[512];
     int oct1, oct2, oct3, oct4;
-    apr_pool_t *p = NULL;
     ip_t *entry;
-
-    apr_pool_create(&p, NULL);
+    apr_pool_t *p = module_pool;
 
     /* IP already exists in cache? */
     entry = apr_hash_get(hash_remote_ip, r->useragent_ip, APR_HASH_KEY_STRING);
     if (entry != NULL)
     {
       /* Entry exired? */
-      if (entry->stamp > (apr_time_now() - cfg->cache_ip_validity))
+      if (entry->stamp > (time(NULL) - cfg->cache_ip_validity))
       {
         /* Not expired, actualize timestamp */
-        entry->stamp = apr_time_now();
+#ifdef DEBUG
+        ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, MODULE_NAME ": updated ip %s in cache with cachesize %d", r->useragent_ip, apr_hash_count(hash_remote_ip));
+#endif
+        entry->stamp = time(NULL);
         return DECLINED;
       }
+#ifdef DEBUG
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, MODULE_NAME ": outdated ip %s in cache", r->useragent_ip);
+#endif
     }
 
     /* Lookup remote_ip */
+#ifdef DEBUG
+    ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, MODULE_NAME ": lookup ip %s", r->useragent_ip);
+#endif
     sscanf(r->useragent_ip, "%d.%d.%d.%d",&oct1, &oct2, &oct3, &oct4);
     snprintf(lookup_ip, sizeof(lookup_ip), "%d.%d.%d.%d.%s", oct4, oct3, oct2, oct1, cfg->dnshost);
 
@@ -359,6 +406,9 @@ static int spamhaus_handler(request_rec *r)
       struct in_addr addr;
       addr.s_addr = *(u_long *)hp->h_addr_list[0];
 
+#ifdef DEBUG
+      ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, MODULE_NAME ": ip %s in spamhaus blacklist", r->useragent_ip);
+#endif
       sscanf(inet_ntoa(addr),"%d.%d.%d.%d", &oct1, &oct2, &oct3, &oct4);
 
       if (oct1 != 127)
@@ -375,6 +425,7 @@ static int spamhaus_handler(request_rec *r)
           add_cache(p, r->useragent_ip, cfg->cache_ip_size, cfg->cache_ip_validity);
           return DECLINED;
         }
+        
       }
 
       if ( cfg->unaffected != NULL )
@@ -447,7 +498,10 @@ static const char *cachesize(cmd_parms *parms, void *dummy, const char *arg)
   cfg->cache_ip_size = atoi(arg);
 
   if (cfg->cache_ip_size <= 0) cfg->cache_ip_size = DEF_CACHE_SIZE;
-  if (cfg->cache_ip_size > MAX_CACHE_SIZE) cfg->cache_ip_size = MAX_CACHE_SIZE; 
+  if (cfg->cache_ip_size > MAX_CACHE_SIZE) cfg->cache_ip_size = MAX_CACHE_SIZE;
+#ifdef DEBUG_CACHE_SIZE
+  cfg->cache_ip_size = 10;
+#endif  
   return NULL;
 }
 
@@ -460,6 +514,9 @@ static const char *cachevalidity(cmd_parms *parms, void *dummy, const char *arg)
   cfg->cache_ip_validity = atoi(arg);
   
   if (cfg->cache_ip_validity <= 0) cfg->cache_ip_validity = DEV_CACHE_TIME_S;
+#ifdef DEBUG_CACHE_VALIDITY
+  cfg->cache_ip_validity = 15;
+#endif
   return NULL;
 }
 
@@ -488,11 +545,15 @@ static command_rec spamhaus_cmds[] = {
 /* Called on module init */
 static int spamhaus_init(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *s)
 {
-  /* Init static variables, create hash tables for ip whitelist, unaffected domains and ip lookup cache */
-  old_whitelist_mtime = old_unaffected_mtime = (time_t)0;
-  hash_whitelist = apr_hash_make(p);
-  hash_unaffected = apr_hash_make(p);
-  hash_remote_ip = apr_hash_make(p);
+  /* Init configuration file timestamps */
+  whitelist_mtime = old_whitelist_mtime = unaffected_mtime = old_unaffected_mtime = 0;
+
+  /* Create hash tables for ip whitelist, unaffected domains and ip lookup cache */
+  apr_pool_create(&module_pool, NULL);
+  hash_whitelist = apr_hash_make(module_pool);
+  hash_unaffected = apr_hash_make(module_pool);
+  hash_remote_ip = apr_hash_make(module_pool);
+
   ap_log_error(APLOG_MARK, APLOG_INFO, 0, s, MODULE_NAME " " MODULE_VERSION " started.");
   return OK;
 }
