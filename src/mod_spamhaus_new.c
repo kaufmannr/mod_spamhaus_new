@@ -74,7 +74,7 @@ static void register_hooks(apr_pool_t *p);
 
 int check_whitelist(apr_pool_t *p, char *conf, request_rec *r);
 int check_unaffected(apr_pool_t *p, char *conf, request_rec *r);
-void update_whitelist(apr_pool_t *p, char *filename);
+void update_whitelist(apr_pool_t *p, char *filename, request_rec *r);
 void update_unaffected(apr_pool_t *p, char *filename, request_rec *r);
 void add_cache(apr_pool_t *p, char *ip, int cache_ip_size, int cache_ip_validity);
 void get_file_mtime(char* filename, time_t* mtime);
@@ -138,7 +138,7 @@ static void *spamhaus_create_dir_config(apr_pool_t *p, char *path)
 }
 
 /* Update useragent_ip whitelist from file */
-void update_whitelist(apr_pool_t *p, char *filename)
+void update_whitelist(apr_pool_t *p, char *filename, request_rec *r)
 {
   FILE *file;
   char *nl;
@@ -164,6 +164,11 @@ void update_whitelist(apr_pool_t *p, char *filename)
         
         apr_cpystrn(entry->ip, line, sizeof(entry->ip));
         apr_hash_set(hash_whitelist, entry->ip, APR_HASH_KEY_STRING, entry);
+      }
+      else
+      {
+        ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Bad file (line length) %s", filename);
+        break;
       }
     }
     fclose(file);
@@ -200,6 +205,11 @@ void update_unaffected(apr_pool_t *p, char *filename, request_rec *r)
         apr_cpystrn(entry->domain, line, sizeof(entry->domain));
         apr_hash_set(hash_unaffected, entry->domain, APR_HASH_KEY_STRING, entry);
       }
+      else
+      {
+        ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Bad file (line length) %s", filename);
+        break;
+      }
     }
     fclose(file);
   }
@@ -225,7 +235,7 @@ int check_whitelist(apr_pool_t *p, char *filename, request_rec *r)
 #ifdef DEBUG
     ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Reloading whitelist %s", filename);
 #endif
-    update_whitelist(p, filename);
+    update_whitelist(p, filename, r);
     old_whitelist_mtime = whitelist_mtime;
   }
 
