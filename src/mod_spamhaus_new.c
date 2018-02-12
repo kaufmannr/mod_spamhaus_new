@@ -99,7 +99,7 @@ typedef struct
 
 typedef struct
 {
-  char ip[15];
+  char ip[16];
   time_t stamp;
 } ip_t;
 
@@ -153,23 +153,17 @@ void update_whitelist(apr_pool_t *p, char *filename, request_rec *r)
     { 
       /* Is it a complete line? */
       nl = strchr(line, '\n');
-      if (nl != NULL)
-      {
-        *nl = 0;
+      if (nl != NULL) *nl = 0;
       
-        /* Get zeroed memory from according pool */
-        ip_t *entry = apr_palloc(p, sizeof(ip_t));
-        if (entry == NULL)
-          break;
-        
-        apr_cpystrn(entry->ip, line, sizeof(entry->ip));
-        apr_hash_set(hash_whitelist, entry->ip, APR_HASH_KEY_STRING, entry);
-      }
-      else
-      {
-        ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Bad file (line length) %s", filename);
+      /* Get zeroed memory from according pool */
+      ip_t *entry = apr_palloc(p, sizeof(ip_t));
+      if (entry == NULL)
         break;
-      }
+#ifdef DEBUG        
+      ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Read whitelist line %s", line);
+#endif      
+      apr_cpystrn(entry->ip, line, sizeof(entry->ip));
+      apr_hash_set(hash_whitelist, entry->ip, APR_HASH_KEY_STRING, entry);
     }
     fclose(file);
   }
@@ -191,25 +185,17 @@ void update_unaffected(apr_pool_t *p, char *filename, request_rec *r)
     { 
       /* Is it a complete line? */
       nl = strchr(line, '\n');
-      if (nl != NULL)
-      {
-        *nl = 0;
+      if (nl != NULL) *nl = 0;
       
-        /* Get zeroed memory from according pool */
-        unaffected_t *entry = apr_palloc(p, sizeof(unaffected_t));
-        if (entry == NULL)
-          break;
-#ifdef DEBUG        
-        ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Read line %s", line);
-#endif
-        apr_cpystrn(entry->domain, line, sizeof(entry->domain));
-        apr_hash_set(hash_unaffected, entry->domain, APR_HASH_KEY_STRING, entry);
-      }
-      else
-      {
-        ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Bad file (line length) %s", filename);
+      /* Get zeroed memory from according pool */
+      unaffected_t *entry = apr_palloc(p, sizeof(unaffected_t));
+      if (entry == NULL)
         break;
-      }
+#ifdef DEBUG        
+      ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Read unaffected line %s", line);
+#endif
+      apr_cpystrn(entry->domain, line, sizeof(entry->domain));
+      apr_hash_set(hash_unaffected, entry->domain, APR_HASH_KEY_STRING, entry);
     }
     fclose(file);
   }
@@ -338,12 +324,18 @@ void add_cache(apr_pool_t *p, char *ip, int cache_ip_size, int cache_ip_validity
 
     apr_hash_this(hidx, NULL, NULL, (void*)&entry);
     apr_hash_set(hash_remote_ip, entry->ip, APR_HASH_KEY_STRING, NULL);
+    /* Better not use pool memory but malloc/free entries? Pool still exists... */
     hash_size--;
   }
 
   /* Add IP to cache */
   entry = apr_hash_get(hash_remote_ip, ip, APR_HASH_KEY_STRING);
-  if (entry == NULL)
+  if (entry != NULL)
+  {
+    /* Update timestamp */
+    entry->stamp = time(NULL);
+  }
+  else
   {
     /* Create new entry, get zeroed memory from according pool */
     entry = apr_palloc(p, sizeof(ip_t));
@@ -351,9 +343,9 @@ void add_cache(apr_pool_t *p, char *ip, int cache_ip_size, int cache_ip_validity
       return;
 
     apr_cpystrn(entry->ip, ip, sizeof(entry->ip));
+    entry->stamp = time(NULL);
+    apr_hash_set(hash_remote_ip, entry->ip, APR_HASH_KEY_STRING, entry);
   }
-  entry->stamp = time(NULL);
-  apr_hash_set(hash_remote_ip, entry->ip, APR_HASH_KEY_STRING, entry);
 }
 
 /* Get file modification time and store it in mtime */
