@@ -49,7 +49,7 @@
 #define MODULE_VERSION    "0.8"
 #define DEF_CACHE_SIZE    2048
 #define MAX_CACHE_SIZE    16384
-#define DEV_CACHE_TIME_S  172800
+#define DEF_CACHE_TIME_S  172800
 
 #define STR_HELPER(x)     #x
 #define STR(x)            STR_HELPER(x)
@@ -118,7 +118,7 @@ static mod_config_t *create_config(apr_pool_t *p)
   cfg->unaffected = NULL;
   cfg->dnshost = "sbl-xbl.spamhaus.org";
   cfg->cache_ip_size = DEF_CACHE_SIZE;
-  cfg->cache_ip_validity = DEV_CACHE_TIME_S;
+  cfg->cache_ip_validity = DEF_CACHE_TIME_S;
   cfg->c_err = "Access Denied! Your IP address is blacklisted because of malicious behavior in the past.";
   return cfg;
 }
@@ -515,7 +515,7 @@ static const char *cachevalidity(cmd_parms *parms, void *dummy, const char *arg)
   
   cfg->cache_ip_validity = atoi(arg);
   
-  if (cfg->cache_ip_validity <= 0) cfg->cache_ip_validity = DEV_CACHE_TIME_S;
+  if (cfg->cache_ip_validity <= 0) cfg->cache_ip_validity = DEF_CACHE_TIME_S;
 #ifdef DEBUG_CACHE_VALIDITY
   cfg->cache_ip_validity = 15;
 #endif
@@ -539,7 +539,7 @@ static command_rec spamhaus_cmds[] = {
   AP_INIT_TAKE1("MS_WhiteList", whitelist_conf, NULL, RSRC_CONF, "The path of your whitelist file"),
   AP_INIT_TAKE1("MS_UnaffectedDomains", unaffected_conf, NULL, RSRC_CONF, "The path of your unaffected domains file"),
   AP_INIT_TAKE1("MS_CacheSize", cachesize, NULL, RSRC_CONF, "Number of cache entries. Default: " STR(DEF_CACHE_SIZE) " Max:" STR(MAX_CACHE_SIZE)),
-  AP_INIT_TAKE1("MS_CacheValidity", cachevalidity, NULL, RSRC_CONF, "Time in seconds for which cache entries are valid. Default: " STR(DEV_CACHE_TIME_S)),
+  AP_INIT_TAKE1("MS_CacheValidity", cachevalidity, NULL, RSRC_CONF, "Time in seconds for which cache entries are valid. Default: " STR(DEF_CACHE_TIME_S)),
   AP_INIT_TAKE1("MS_CustomError", custom_err_cfg, NULL, RSRC_CONF, "Custom error message"),
   {NULL}
 };
