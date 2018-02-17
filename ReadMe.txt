@@ -125,20 +125,29 @@ MS_CustomError
 
 
 Synopsis:
---------
+---------
 
 <IfModule mod_spamhaus_new.c>
 
+# HTTP methods that should be checked
 MS_METHODS POST,PUT,OPTIONS,CONNECT 
 
+# Whitelist of IP addresses and address ranges
 MS_WhiteList /etc/spamhaus.wl
 
+# List of domains that should not be affected
 MS_UnaffectedDomains /etc/spamhaus.unaffected
 
+# Used DNS-based blackhole list 
 #MS_Dns local.rbldnsd.instance.of.sbl-xbl
 
+# IP cache size
 MS_CacheSize 4096
 
+# IP cache entry validity
+MS_CacheValidity 86400
+
+# Error message that is presented to the user
 #MS_CustomError "My custom error message"
 
 </IfModule>
