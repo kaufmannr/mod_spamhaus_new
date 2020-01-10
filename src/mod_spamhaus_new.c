@@ -1,9 +1,9 @@
 /*
  *
- * Date:        2018/02/11
+ * Date:        2020/01/10
  * Info:        mod_spamhaus_new Apache 2.4 module
  * Contact:     mailto: <info [at] kaufmann-automotive.ch>
- * Version:     0.8
+ * Version:     0.9
  * Authors:     Luca Ercoli <luca.e [at] seeweb.it> (based on mod_spamhaus)
  *              Rainer Kaufmann <info [at] kaufmann-automotive.ch>
  *
@@ -46,7 +46,7 @@
 
 /* Module configuration */
 #define MODULE_NAME       "mod_spamhaus_new"
-#define MODULE_VERSION    "0.8"
+#define MODULE_VERSION    "0.9"
 #define DEF_CACHE_SIZE    2048
 #define MAX_CACHE_SIZE    16384
 #define DEF_CACHE_TIME_S  172800
@@ -301,12 +301,12 @@ int check_unaffected(apr_pool_t *p, char *filename, request_rec *r)
 #endif
   entry = apr_hash_get(hash_unaffected, r->hostname, APR_HASH_KEY_STRING);
 #ifdef DEBUG
-    ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Unaffected domain found for %s:%d", r->hostname, (entry != NULL));
+  ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "Unaffected domain found for %s:%d", r->hostname, (entry != NULL));
 #endif
   return (entry != NULL);
 }
 
-/* Add a looked up remote_ip to our cache actualize timestamps and handle max cache size */
+/* Add a looked up remote_ip to our cache, actualize timestamps and handle max cache size. */
 void add_cache(apr_pool_t *p, char *ip, int cache_ip_size, int cache_ip_validity)
 {
   int hash_size, hash_deflate;
@@ -374,8 +374,30 @@ static int spamhaus_handler(request_rec *r)
     int oct1, oct2, oct3, oct4;
     ip_t *entry;
     apr_pool_t *p = module_pool;
+    
+    /* Domain should not be checked? */
+    if ( cfg->unaffected != NULL )
+    {
+      if ( check_unaffected(p, cfg->unaffected, r) )
+      {
+        ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, MODULE_NAME ": domain %s is not checked. Allow connection to %s%s", r->hostname, r->hostname, r->uri);
+        /* Add NOT no cache */
+        return DECLINED;
+      }
+    }
 
-    /* IP already exists in cache? */
+    /* Client IP whitelisted? */
+    if ( cfg->whitelist != NULL )
+    {
+      if ( check_whitelist(p, cfg->whitelist, r) )
+      {
+        ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, MODULE_NAME ": address %s is whitelisted. Allow connection to %s%s", r->useragent_ip, r->hostname, r->uri);
+        add_cache(p, r->useragent_ip, cfg->cache_ip_size, cfg->cache_ip_validity);
+        return DECLINED;
+      }        
+    }
+      
+    /* Normal request, IP already exists in cache? */
     entry = apr_hash_get(hash_remote_ip, r->useragent_ip, APR_HASH_KEY_STRING);
     if (entry != NULL)
     {
@@ -392,7 +414,7 @@ static int spamhaus_handler(request_rec *r)
 #ifdef DEBUG
       ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, MODULE_NAME ": outdated ip %s in cache", r->useragent_ip);
 #endif
-    }
+    }  
 
     /* Lookup remote_ip */
 #ifdef DEBUG
@@ -417,28 +439,7 @@ static int spamhaus_handler(request_rec *r)
       {
         ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, MODULE_NAME ": address %s is blacklisted but it's not in the 127.0.0.0/8 range. POSSIBLE WILD-CARDING TYPOSQUATTERS ATTACK! IP address will not get filtered", r->useragent_ip);
         return DECLINED;
-      }
-
-      if ( cfg->whitelist != NULL )
-      {
-        if ( check_whitelist(p, cfg->whitelist, r) )
-        {
-          ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, MODULE_NAME ": address %s is whitelisted. Allow connection to %s%s", r->useragent_ip, r->hostname, r->uri);
-          add_cache(p, r->useragent_ip, cfg->cache_ip_size, cfg->cache_ip_validity);
-          return DECLINED;
-        }
-        
-      }
-
-      if ( cfg->unaffected != NULL )
-      {
-        if ( check_unaffected(p, cfg->unaffected, r) )
-        {
-          ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, MODULE_NAME ": domain %s is not checked. Allow connection to %s%s", r->hostname, r->hostname, r->uri);
-          /* Add NOT no cache */
-          return DECLINED;
-        }
-      }
+      }      
 
       ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, MODULE_NAME ": address %s is blacklisted. Deny connection to %s%s", lookup_ip, r->hostname, r->uri);
       r->content_type = "text/plain"; 
