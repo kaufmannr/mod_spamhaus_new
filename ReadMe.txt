@@ -53,7 +53,7 @@ CONFIGURATION
 First, you must add following command to the main config file of you're web server to load 
 mod_spamhaus_new module:
 
-LoadModule spamhaus_module   /usr/lib/apache2/modules/mod_spamhaus_new.so
+LoadModule spamhaus_new_module /usr/lib/apache2/modules/mod_spamhaus_new.so
 
 (The path to mod_spamhaus_new.so depends on your apache installation)
 
