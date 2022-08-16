@@ -14,3 +14,6 @@ low-volume non-commercial use.
 
 To check if you qualify for free use, please see:
 Spamhaus DNSBL usage criteria (http://www.spamhaus.org/organization/dnsblusage.html)
+
+©2022 Kaufmann Automotive GmbH
+https://www.kaufmann-automotive.ch
